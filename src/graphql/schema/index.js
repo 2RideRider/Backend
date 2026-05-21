@@ -11,6 +11,7 @@ const typeDefs = gql`
     walletBalance: Float
     ratings: Float
     isVerified: Boolean
+    createdAt: String
   }
 
   type AuthPayload {
@@ -46,11 +47,66 @@ const typeDefs = gql`
     rating: Float
   }
 
+  type Vehicle {
+    type: String!
+    model: String
+    plateNumber: String!
+    color: String
+  }
+
+  type License {
+    number: String
+    expiryDate: String
+    image: String
+  }
+
+  type DriverEarnings {
+    total: Float
+    today: Float
+  }
+
+  type Driver {
+    id: ID!
+    user: User!
+    vehicle: Vehicle!
+    license: License
+    isOnline: Boolean
+    currentRide: Ride
+    earnings: DriverEarnings
+    documentsVerified: Boolean
+    createdAt: String
+  }
+
   type DriverDocument {
     id: ID!
+    driver: User!
     type: String!
     documentUrl: String!
     status: String!
+    expiryDate: String
+    rejectionReason: String
+    createdAt: String
+  }
+
+  type AdminStats {
+    totalRiders: Int!
+    totalDrivers: Int!
+    totalRides: Int!
+    totalEarnings: Float!
+    activeRides: Int!
+    pendingDrivers: Int!
+  }
+
+  type ConfigStatus {
+    key: String!
+    configured: Boolean!
+    value: String
+  }
+
+  type SystemConfig {
+    port: Int!
+    dbHost: String!
+    services: [ConfigStatus!]!
   }
 
   type Query {
@@ -61,6 +117,13 @@ const typeDefs = gql`
     getDriverStats: DriverStats
     getDriverDocuments: [DriverDocument]
     getAvailableRides: [Ride]
+
+    # Admin Queries
+    getAllUsers: [User]
+    getAllDrivers: [Driver]
+    getAdminStats: AdminStats
+    getAllDriverDocuments: [DriverDocument]
+    getSystemConfig: SystemConfig
   }
 
   type Mutation {
@@ -72,6 +135,11 @@ const typeDefs = gql`
     toggleOnline(isOnline: Boolean!): User
     uploadDocument(type: String!, documentUrl: String!): DriverDocument
     updateRideStatus(rideId: ID!, status: String!, otp: String): Ride
+
+    # Admin Mutations
+    updateUserVerification(userId: ID!, isVerified: Boolean!): User
+    updateDriverVerification(driverId: ID!, documentsVerified: Boolean!): Driver
+    updateDocumentStatus(documentId: ID!, status: String!, rejectionReason: String): DriverDocument
   }
 `;
 
