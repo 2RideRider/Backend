@@ -30,10 +30,10 @@ const checkUserExists = async (email, phone) => {
 
 // ─── Helper: find user across all collections by email ───────────────────────
 
-const findUserByEmail = async (email) => {
-  let user = await Rider.findOne({ email }).select('+password');
-  if (!user) user = await Captain.findOne({ email }).select('+password');
-  if (!user) user = await User.findOne({ email }).select('+password');
+const findUserByEmailOrPhone = async (identifier) => {
+  let user = await Rider.findOne({ $or: [{ email: identifier }, { phone: identifier }] }).select('+password');
+  if (!user) user = await Captain.findOne({ $or: [{ email: identifier }, { phone: identifier }] }).select('+password');
+  if (!user) user = await User.findOne({ $or: [{ email: identifier }, { phone: identifier }] }).select('+password');
   return user;
 };
 
@@ -228,20 +228,23 @@ const resolvers = {
     },
 
     // ── Legacy Register (kept for backward compat) ────────────────────────────
-    register: async (_, { name, email, phone, password, role }) => {
+    register: async (_, { name, email, phone, password, role, vehicleType, vehicleModel, plateNumber, vehicleColor }) => {
       const exists = await checkUserExists(email, phone);
       if (exists) throw new Error('User already exists');
 
       let user;
       if (role === 'driver') {
-        // Captain with placeholder vehicle — use registerCaptain for proper flow
         user = await Captain.create({
-          name, email, phone, password, role: 'driver',
+          name,
+          email,
+          phone,
+          password,
+          role: 'driver',
           vehicle: {
-            type: 'car',
-            plateNumber: `TEMP-${Math.floor(1000 + Math.random() * 9000)}`,
-            model: 'Not Provided',
-            color: 'Not Provided',
+            type: vehicleType || 'car',
+            plateNumber: plateNumber || `TEMP-${Math.floor(1000 + Math.random() * 9000)}`,
+            model: vehicleModel || 'Not Provided',
+            color: vehicleColor || 'Not Provided',
           },
         });
       } else if (role === 'admin') {
@@ -259,7 +262,7 @@ const resolvers = {
 
     // ── Login ─────────────────────────────────────────────────────────────────
     login: async (_, { email, password }) => {
-      const user = await findUserByEmail(email);
+      const user = await findUserByEmailOrPhone(email);
 
       if (!user) throw new Error('Invalid email or password');
 
