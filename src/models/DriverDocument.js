@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const driverDocumentSchema = new mongoose.Schema({
   driver: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'Captain',
     required: true,
   },
   type: {

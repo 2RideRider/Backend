@@ -1,6 +1,7 @@
 const User = require('../../models/User');
 const Ride = require('../../models/Ride');
-const Driver = require('../../models/Driver');
+const Rider = require('../../models/Rider');
+const Captain = require('../../models/Captain');
 const DriverDocument = require('../../models/DriverDocument');
 const jwt = require('jsonwebtoken');
 
@@ -16,11 +17,21 @@ const resolvers = {
   Query: {
     me: async (_, __, { user }) => {
       if (!user) return null;
-      return await User.findById(user.id);
+      let currentUser = await Rider.findById(user.id);
+      if (!currentUser) {
+        currentUser = await Captain.findById(user.id);
+      }
+      if (!currentUser) {
+        currentUser = await User.findById(user.id);
+      }
+      return currentUser;
     },
     getRides: async (_, __, { user }) => {
       if (!user) throw new Error('Not authenticated');
-      const currentUser = await User.findById(user.id);
+      let currentUser = await Rider.findById(user.id);
+      if (!currentUser) currentUser = await Captain.findById(user.id);
+      if (!currentUser) currentUser = await User.findById(user.id);
+
       if (currentUser && currentUser.role === 'admin') {
         return await Ride.find({}).populate('rider driver').sort({ createdAt: -1 });
       }
@@ -28,12 +39,16 @@ const resolvers = {
     },
     getDriverStats: async (_, __, { user }) => {
       if (!user) throw new Error('Not authenticated');
-      // Simplified logic
+      const captain = await Captain.findById(user.id);
+      const totalEarnings = captain && captain.earnings ? captain.earnings.total : 0;
+      const todayEarnings = captain && captain.earnings ? captain.earnings.today : 0;
+      const rating = captain ? captain.ratings : 0;
+      const completedRides = await Ride.countDocuments({ driver: user.id, status: 'completed' });
       return {
-        totalEarnings: 1500.50,
-        todayEarnings: 450.00,
-        completedRides: 12,
-        rating: 4.8,
+        totalEarnings,
+        todayEarnings,
+        completedRides,
+        rating,
       };
     },
     getDriverDocuments: async (_, __, { user }) => {
@@ -52,7 +67,7 @@ const resolvers = {
       if (!currentUser || currentUser.role !== 'admin') {
         throw new Error('Not authorized as admin');
       }
-      return await User.find({}).sort({ createdAt: -1 });
+      return await Rider.find({}).sort({ createdAt: -1 });
     },
     getAllDrivers: async (_, __, { user }) => {
       if (!user) throw new Error('Not authenticated');
@@ -60,7 +75,7 @@ const resolvers = {
       if (!currentUser || currentUser.role !== 'admin') {
         throw new Error('Not authorized as admin');
       }
-      return await Driver.find({}).populate('user currentRide').sort({ createdAt: -1 });
+      return await Captain.find({}).populate('currentRide').sort({ createdAt: -1 });
     },
     getAdminStats: async (_, __, { user }) => {
       if (!user) throw new Error('Not authenticated');
@@ -69,15 +84,15 @@ const resolvers = {
         throw new Error('Not authorized as admin');
       }
 
-      const totalRiders = await User.countDocuments({ role: 'rider' });
-      const totalDrivers = await User.countDocuments({ role: 'driver' });
+      const totalRiders = await Rider.countDocuments({});
+      const totalDrivers = await Captain.countDocuments({});
       const totalRides = await Ride.countDocuments({});
       const activeRides = await Ride.countDocuments({ status: { $in: ['accepted', 'started'] } });
       
       const completedRidesList = await Ride.find({ status: 'completed' });
       const totalEarnings = completedRidesList.reduce((acc, r) => acc + (r.fare || 0), 0);
 
-      const pendingDrivers = await Driver.countDocuments({ documentsVerified: false });
+      const pendingDrivers = await Captain.countDocuments({ documentsVerified: false });
 
       return {
         totalRiders,
@@ -124,15 +139,22 @@ const resolvers = {
   },
   Mutation: {
     register: async (_, { name, email, phone, password, role }) => {
-      const userExists = await User.findOne({ $or: [{ email }, { phone }] });
-      if (userExists) throw new Error('User already exists');
+      const riderExists = await Rider.findOne({ $or: [{ email }, { phone }] });
+      const captainExists = await Captain.findOne({ $or: [{ email }, { phone }] });
+      const adminExists = await User.findOne({ $or: [{ email }, { phone }] });
 
-      const user = await User.create({ name, email, phone, password, role });
+      if (riderExists || captainExists || adminExists) {
+        throw new Error('User already exists');
+      }
 
-      // If registered as driver, create default driver details
+      let user;
       if (role === 'driver') {
-        await Driver.create({
-          user: user._id,
+        user = await Captain.create({
+          name,
+          email,
+          phone,
+          password,
+          role: 'driver',
           vehicle: {
             type: 'car',
             plateNumber: `PLATE-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -145,6 +167,10 @@ const resolvers = {
             image: ''
           }
         });
+      } else if (role === 'admin') {
+        user = await User.create({ name, email, phone, password, role: 'admin' });
+      } else {
+        user = await Rider.create({ name, email, phone, password, role: 'rider' });
       }
 
       return {
@@ -154,7 +180,14 @@ const resolvers = {
       };
     },
     login: async (_, { email, password }) => {
-      const user = await User.findOne({ email }).select('+password');
+      let user = await Rider.findOne({ email }).select('+password');
+      if (!user) {
+        user = await Captain.findOne({ email }).select('+password');
+      }
+      if (!user) {
+        user = await User.findOne({ email }).select('+password');
+      }
+
       if (!user || !(await user.matchPassword(password))) {
         throw new Error('Invalid credentials');
       }
@@ -222,7 +255,7 @@ const resolvers = {
     },
     toggleOnline: async (_, { isOnline }, { user }) => {
       if (!user) throw new Error('Not authenticated');
-      return await User.findByIdAndUpdate(user.id, { isOnline }, { new: true });
+      return await Captain.findByIdAndUpdate(user.id, { isOnline }, { new: true });
     },
     uploadDocument: async (_, { type, documentUrl }, { user }) => {
       if (!user) throw new Error('Not authenticated');
@@ -249,7 +282,7 @@ const resolvers = {
       if (!currentUser || currentUser.role !== 'admin') {
         throw new Error('Not authorized as admin');
       }
-      return await User.findByIdAndUpdate(userId, { isVerified }, { new: true });
+      return await Rider.findByIdAndUpdate(userId, { isVerified }, { new: true });
     },
     updateDriverVerification: async (_, { driverId, documentsVerified }, { user }) => {
       if (!user) throw new Error('Not authenticated');
@@ -257,7 +290,7 @@ const resolvers = {
       if (!currentUser || currentUser.role !== 'admin') {
         throw new Error('Not authorized as admin');
       }
-      return await Driver.findByIdAndUpdate(driverId, { documentsVerified }, { new: true }).populate('user');
+      return await Captain.findByIdAndUpdate(driverId, { documentsVerified }, { new: true });
     },
     updateDocumentStatus: async (_, { documentId, status, rejectionReason }, { user }) => {
       if (!user) throw new Error('Not authenticated');
@@ -273,18 +306,21 @@ const resolvers = {
       ).populate('driver');
 
       if (status === 'approved' && doc.driver) {
-        const driverUserId = doc.driver._id;
-        const docs = await DriverDocument.find({ driver: driverUserId });
+        const captainId = doc.driver._id;
+        const docs = await DriverDocument.find({ driver: captainId });
         const allApproved = docs.length >= 3 && docs.every(d => d.status === 'approved');
         if (allApproved) {
-          await Driver.findOneAndUpdate({ user: driverUserId }, { documentsVerified: true });
+          await Captain.findByIdAndUpdate(captainId, { documentsVerified: true });
         }
       } else if (status === 'rejected' && doc.driver) {
-        await Driver.findOneAndUpdate({ user: doc.driver._id }, { documentsVerified: false });
+        await Captain.findByIdAndUpdate(doc.driver._id, { documentsVerified: false });
       }
 
       return doc;
     },
+  },
+  Driver: {
+    user: (parent) => parent,
   },
 };
 

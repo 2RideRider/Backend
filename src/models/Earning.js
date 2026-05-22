@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const earningSchema = new mongoose.Schema({
   driver: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    ref: 'Captain',
     required: true,
   },
   ride: {
