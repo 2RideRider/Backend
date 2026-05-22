@@ -371,6 +371,15 @@ const resolvers = {
       return doc;
     },
 
+    deleteDocument: async (_, { type }, { user }) => {
+      if (!user) throw new Error('Not authenticated');
+      const doc = await DriverDocument.findOne({ driver: user.id, type });
+      if (!doc) return false;
+      await DriverDocument.deleteOne({ driver: user.id, type });
+      await Captain.findByIdAndUpdate(user.id, { documentsVerified: false });
+      return true;
+    },
+
     // ── Admin Mutations ───────────────────────────────────────────────────────
 
     updateUserVerification: async (_, { userId, isVerified }, { user }) => {

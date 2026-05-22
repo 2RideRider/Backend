@@ -13,6 +13,7 @@ const typeDefs = gql`
     walletBalance: Float
     ratings: Float
     isVerified: Boolean
+    isOnline: Boolean
     vehicle: Vehicle
     createdAt: String
   }
@@ -223,6 +224,7 @@ const typeDefs = gql`
 
     # Documents
     uploadDocument(type: String!, documentUrl: String!): DriverDocument
+    deleteDocument(type: String!): Boolean
 
     # Admin Mutations
     updateUserVerification(userId: ID!, isVerified: Boolean!): User
