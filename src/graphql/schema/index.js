@@ -1,6 +1,8 @@
 const { gql } = require('apollo-server-express');
 
 const typeDefs = gql`
+  # ─── User Types ───────────────────────────────────────────────────────────────
+
   type User {
     id: ID!
     name: String!
@@ -11,6 +13,24 @@ const typeDefs = gql`
     walletBalance: Float
     ratings: Float
     isVerified: Boolean
+    vehicle: Vehicle
+    createdAt: String
+  }
+
+  type CaptainUser {
+    id: ID!
+    name: String!
+    email: String!
+    phone: String!
+    role: String!
+    profileImage: String
+    ratings: Float
+    isVerified: Boolean
+    isOnline: Boolean
+    documentsVerified: Boolean
+    vehicle: Vehicle
+    license: License
+    earnings: DriverEarnings
     createdAt: String
   }
 
@@ -19,6 +39,14 @@ const typeDefs = gql`
     refreshToken: String!
     user: User!
   }
+
+  type CaptainAuthPayload {
+    token: String!
+    refreshToken: String!
+    captain: CaptainUser!
+  }
+
+  # ─── Location / Ride ──────────────────────────────────────────────────────────
 
   type Location {
     address: String
@@ -39,6 +67,8 @@ const typeDefs = gql`
     paymentStatus: String
     createdAt: String
   }
+
+  # ─── Driver / Captain ─────────────────────────────────────────────────────────
 
   type DriverStats {
     totalEarnings: Float
@@ -88,6 +118,8 @@ const typeDefs = gql`
     createdAt: String
   }
 
+  # ─── Admin ────────────────────────────────────────────────────────────────────
+
   type AdminStats {
     totalRiders: Int!
     totalDrivers: Int!
@@ -109,6 +141,17 @@ const typeDefs = gql`
     services: [ConfigStatus!]!
   }
 
+  # ─── Input Types ──────────────────────────────────────────────────────────────
+
+  input VehicleInput {
+    type: String!
+    model: String
+    plateNumber: String!
+    color: String
+  }
+
+  # ─── Queries ──────────────────────────────────────────────────────────────────
+
   type Query {
     me: User
     getRides: [Ride]
@@ -126,20 +169,69 @@ const typeDefs = gql`
     getSystemConfig: SystemConfig
   }
 
+  # ─── Mutations ────────────────────────────────────────────────────────────────
+
   type Mutation {
-    register(name: String!, email: String!, phone: String!, password: String!, role: String!): AuthPayload
+    # Rider registration (role hardcoded to 'rider')
+    registerRider(
+      name: String!
+      email: String!
+      phone: String!
+      password: String!
+    ): AuthPayload
+
+    # Captain registration (requires vehicle info)
+    registerCaptain(
+      name: String!
+      email: String!
+      phone: String!
+      password: String!
+      vehicle: VehicleInput!
+    ): CaptainAuthPayload
+
+    # Legacy register (kept for backward compatibility)
+    register(
+      name: String!
+      email: String!
+      phone: String!
+      password: String!
+      role: String!
+      vehicleType: String
+      vehicleModel: String
+      plateNumber: String
+      vehicleColor: String
+    ): AuthPayload
+
+    # Login works for both rider and captain
     login(email: String!, password: String!): AuthPayload
-    requestRide(pickupAddress: String!, pickupCoords: [Float]!, dropAddress: String!, dropCoords: [Float]!, vehicleType: String!, fare: Float!): Ride
+
+    # Ride mutations
+    requestRide(
+      pickupAddress: String!
+      pickupCoords: [Float]!
+      dropAddress: String!
+      dropCoords: [Float]!
+      vehicleType: String!
+      fare: Float!
+    ): Ride
     acceptRide(rideId: ID!): Ride
+    updateRideStatus(rideId: ID!, status: String!, otp: String): Ride
+
+    # Location / status
     updateLocation(lat: Float!, lng: Float!): User
     toggleOnline(isOnline: Boolean!): User
+
+    # Documents
     uploadDocument(type: String!, documentUrl: String!): DriverDocument
-    updateRideStatus(rideId: ID!, status: String!, otp: String): Ride
 
     # Admin Mutations
     updateUserVerification(userId: ID!, isVerified: Boolean!): User
     updateDriverVerification(driverId: ID!, documentsVerified: Boolean!): Driver
-    updateDocumentStatus(documentId: ID!, status: String!, rejectionReason: String): DriverDocument
+    updateDocumentStatus(
+      documentId: ID!
+      status: String!
+      rejectionReason: String
+    ): DriverDocument
   }
 `;
 
