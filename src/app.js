@@ -22,6 +22,10 @@ async function startServer() {
   const app = express();
   const httpServer = http.createServer(app);
 
+  // Trust the first proxy hop (required on Render/Heroku/Railway etc.)
+  // so express-rate-limit can read X-Forwarded-For correctly
+  app.set('trust proxy', 1);
+
   // Socket.io setup
   const io = new Server(httpServer, {
     cors: {
